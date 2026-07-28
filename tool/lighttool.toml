@@ -1,0 +1,8 @@
+[tool]
+id = "com.dailyhobbyist.lists"
+label = "Lists"
+versionCode = 29
+versionName = "3.4.1"
+permissions = []
+# change to com.thelightphone.sdk.emulator if you run this on the SDK emulator
+serverPackage = "com.lightos"

@@ -1,0 +1,100 @@
+package com.dailyhobbyist.lists
+
+import androidx.compose.foundation.text.input.TextFieldState
+import androidx.compose.foundation.text.input.delete
+import androidx.compose.ui.text.TextRange
+import com.thelightphone.lp3Keyboard.ui.viewmodel.Lp3RepeatableKeyboardCallback
+import com.thelightphone.lp3Keyboard.ui.SpecialKey
+
+/**
+ * Routes LP3 keyboard presses into a [TextFieldState]. Mirrors the SDK's
+ * own editor callback (which is internal to the SDK module, so we carry
+ * our own copy). [onKeyFeedback] fires on every text-changing key so the
+ * editor can add a haptic tick.
+ */
+class NoteKeyboardCallback(
+    private val state: TextFieldState,
+    private val onKeyFeedback: () -> Unit = {},
+) : Lp3RepeatableKeyboardCallback {
+
+    override fun onKeyPressed(code: Int) = Unit
+
+    override fun onSpecialKeyPressed(key: SpecialKey) {
+        if (key == SpecialKey.Space) insertAtCursor(" ")
+    }
+
+    override fun onKeyReleased(code: Int) {
+        insertCodePoint(code)
+    }
+
+    override fun onSpecialKeyReleased(key: SpecialKey) {
+        when (key) {
+            SpecialKey.Backspace -> {
+                val before = state.text.subSequence(0, state.selection.min)
+                deleteBeforeCursor(surrogateAwareDeleteCount(before, 1))
+            }
+            SpecialKey.Return -> insertAtCursor("\n")
+            else -> Unit
+        }
+    }
+
+    override fun onKeyLongPressed(code: Int) = Unit
+
+    override fun onSpecialKeyLongPressed(key: SpecialKey) {
+        if (key == SpecialKey.Backspace) {
+            val before = state.text.subSequence(0, state.selection.min)
+            deleteBeforeCursor(deleteWordCount(before))
+        }
+    }
+
+    override fun onKeyRepeated(code: Int) {
+        insertCodePoint(code)
+    }
+
+    override fun onSubmitWord(word: CharSequence) {
+        onKeyFeedback()
+        insertAtCursor(word.toString())
+    }
+
+    override fun onSpecialKeyRepeated(specialKey: SpecialKey) {
+        if (specialKey == SpecialKey.Space) insertAtCursor(" ")
+    }
+
+    private fun insertCodePoint(code: Int) {
+        insertAtCursor(buildString { appendCodePoint(code) })
+    }
+
+    private fun insertAtCursor(text: String) {
+        onKeyFeedback()
+        state.edit {
+            val start = selection.min
+            val end = selection.max
+            replace(start, end, text)
+            selection = TextRange(start + text.length)
+        }
+    }
+
+    private fun deleteBeforeCursor(count: Int) {
+        if (count <= 0) return
+        onKeyFeedback()
+        state.edit {
+            val end = selection.min
+            if (end == 0) return@edit
+            val start = (end - count).coerceAtLeast(0)
+            delete(start, end)
+            selection = TextRange(start)
+        }
+    }
+}
+
+private fun surrogateAwareDeleteCount(value: CharSequence, defaultCount: Int): Int {
+    if (value.isEmpty()) return 0
+    val last = value[value.length - 1]
+    return if (Character.isLowSurrogate(last)) 2 else defaultCount
+}
+
+private fun deleteWordCount(value: CharSequence): Int {
+    val trimmed = value.trimEnd()
+    val lastSpace = trimmed.indexOfLast { it.isWhitespace() }
+    return value.length - if (lastSpace >= 0) lastSpace + 1 else 0
+}
