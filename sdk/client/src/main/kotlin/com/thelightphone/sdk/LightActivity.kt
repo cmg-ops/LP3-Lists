@@ -30,6 +30,7 @@ import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
 import com.thelightphone.lp3Keyboard.ui.LightDeviceKeys
 import com.thelightphone.sdk.shared.LightServiceMethod
 import com.thelightphone.sdk.ui.LightModalManager
+import com.thelightphone.sdk.ui.LocalHapticsEnabled
 import kotlinx.coroutines.launch
 import java.io.File
 
@@ -92,6 +93,9 @@ class LightActivity internal constructor() : ComponentActivity() {
         }
         super.onCreate(savedInstanceState)
 
+        // Avoids a stale-content flash when resuming from a stopped task (if false)
+        setRecentsScreenshotEnabled(LightSdkRegistry.entryPoint?.enableRecentsScreenshots == true)
+
         WindowCompat.setDecorFitsSystemWindows(window, false)
         val controller = WindowInsetsControllerCompat(window, window.decorView)
         controller.hide(WindowInsetsCompat.Type.systemBars())
@@ -117,8 +121,10 @@ class LightActivity internal constructor() : ComponentActivity() {
                                 .weight(1f)
                                 .fillMaxWidth(),
                         ) {
+                            val hapticsEnabled by rememberHapticsEnabled().collectAsState()
                             CompositionLocalProvider(
                                 LocalViewModelStoreOwner provides entry.viewModelStoreOwner,
+                                LocalHapticsEnabled provides hapticsEnabled,
                                 content = { entry.screen.Content() },
                             )
                         }
@@ -224,13 +230,16 @@ class SealedLightContext(internal val androidContext: Context) {
     val dataStore: DataStore<Preferences> by lazy{ androidContext.dataStore }
     val filesDir: File by lazy{ androidContext.filesDir }
     val fileShare: LightFileShare by lazy { LightFileShare(androidContext) }
+    val connectivity: LightConnectivity by lazy { LightConnectivity(androidContext) }
     fun readAsset(path: String): ByteArray = androidContext.assets.open(path).use { it.readBytes() }
 }
 /**
  * Wrapper class to pass around an instance of LightActivity without exposing it to
  * user code. Sorry! :)
  */
-class SealedLightActivity(internal val activity: LightActivity)
+class SealedLightActivity(internal val activity: LightActivity) {
+    val vibrator: LightVibrator by lazy { ContextLightVibrator(activity.applicationContext) }
+}
 
 internal val Context.dataStore by preferencesDataStore(
     name = "DEFAULT_DATASTORE"
